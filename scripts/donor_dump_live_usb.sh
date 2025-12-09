@@ -24,7 +24,7 @@
 #       * option_rom.bin + option_rom.json (if readable)
 #       * vpd.bin (if readable)
 #       * lspci-*.txt (diagnostic context)
-#       * resource file copy from sysfs (BAR layout)
+#       * sysfs snapshots: resource(+resourceN), config.bin, ids, driver/iommu metadata
 #   - After collection, copy the datastore to your build machine and run the
 #     normal build flow pointing --datastore at that directory.
 
@@ -78,9 +78,34 @@ SYSFS_PATH="/sys/bus/pci/devices/$BDF"
 echo "[collect] Capturing sysfs metadata snapshot..."
 if [[ -d "$SYSFS_PATH" ]]; then
   cp -f "$SYSFS_PATH/resource" "$DATASTORE/resource" 2>/dev/null || true
+  # Copy individual BAR resource files if present (resource0, resource0_wc, etc.)
+  for f in "$SYSFS_PATH"/resource*; do
+    base=$(basename "$f")
+    cp -f "$f" "$DATASTORE/$base" 2>/dev/null || true
+  done
+
+  # Raw config space dump (binary) for completeness
+  cp -f "$SYSFS_PATH/config" "$DATASTORE/config.bin" 2>/dev/null || true
+
+  # Basic ID files and metadata
+  for f in vendor device subsystem_vendor subsystem_device class revision irq; do
+    if [[ -r "$SYSFS_PATH/$f" ]]; then
+      cp -f "$SYSFS_PATH/$f" "$DATASTORE/$f" 2>/dev/null || true
+    fi
+  done
+
+  # Driver and IOMMU info
+  {
+    echo "driver: $(readlink -f "$SYSFS_PATH/driver" 2>/dev/null || echo none)"
+    echo "iommu_group: $(basename $(readlink -f "$SYSFS_PATH/iommu_group" 2>/dev/null || echo none))"
+    echo "modalias: $(cat "$SYSFS_PATH/modalias" 2>/dev/null || echo none)"
+    echo "numa_node: $(cat "$SYSFS_PATH/numa_node" 2>/dev/null || echo none)"
+  } > "$DATASTORE/sysfs_info.txt"
+
   lspci -vvnn -s "$BDF" > "$DATASTORE/lspci-vvnn.txt" 2>/dev/null || true
   lspci -k -s "$BDF"    > "$DATASTORE/lspci-k.txt"    2>/dev/null || true
   lspci -xxx -s "$BDF"  > "$DATASTORE/lspci-xxx.txt"  2>/dev/null || true
+  lspci -xxxx -s "$BDF" > "$DATASTORE/lspci-xxxx.txt" 2>/dev/null || true
 else
   echo "  WARNING: $SYSFS_PATH not found; device may be absent." >&2
 fi
