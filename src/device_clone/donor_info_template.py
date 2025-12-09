@@ -83,6 +83,14 @@ class DonorInfoTemplateGenerator:
                     "supports_dpc": None,  # User to fill: Downstream Port Containment
                     "supports_resizable_bar": None,  # User to fill: Resizable BAR support
                     "supports_ari": None,  # User to fill: Alternative Routing-ID
+                    "supports_dsn": None,  # User to fill: Device Serial Number
+                    "device_serial_low": None,  # User to fill: Lower 32 bits of device serial
+                    "device_serial_high": None,  # User to fill: Upper 32 bits of device serial
+                    "supports_virtual_channel": None,  # User to fill: Virtual Channel (QoS)
+                    "supports_power_budgeting": None,  # User to fill: Power Budgeting capability
+                    "supports_ptm": None,  # User to fill: Precision Time Measurement
+                    "supports_l1pm": None,  # User to fill: L1 PM Substates for power management
+                    "supports_secondary_pcie": None,  # User to fill: Secondary PCIe (Gen4+)
                 },
                 "bars": [
                     {

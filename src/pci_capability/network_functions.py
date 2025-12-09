@@ -168,6 +168,31 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
             from .hex_constants import EXT_CAP_ID_RESIZABLE_BAR
             caps.add(EXT_CAP_ID_RESIZABLE_BAR)
 
+        # Add universal modern capabilities
+        if self._supports_dsn():
+            from src.device_clone.hex_constants import EXT_CAP_ID_DSN
+            caps.add(EXT_CAP_ID_DSN)
+
+        if self._supports_virtual_channel():
+            from src.device_clone.hex_constants import EXT_CAP_ID_VIRTUAL_CHANNEL
+            caps.add(EXT_CAP_ID_VIRTUAL_CHANNEL)
+
+        if self._supports_power_budgeting():
+            from src.device_clone.hex_constants import EXT_CAP_ID_POWER_BUDGETING
+            caps.add(EXT_CAP_ID_POWER_BUDGETING)
+
+        if self._supports_ptm():
+            from src.device_clone.hex_constants import EXT_CAP_ID_PTM
+            caps.add(EXT_CAP_ID_PTM)
+
+        if self._supports_l1pm():
+            from src.device_clone.hex_constants import EXT_CAP_ID_L1PM
+            caps.add(EXT_CAP_ID_L1PM)
+
+        if self._supports_secondary_pcie():
+            from src.device_clone.hex_constants import EXT_CAP_ID_SECONDARY_PCIE
+            caps.add(EXT_CAP_ID_SECONDARY_PCIE)
+
         return caps
 
     def _supports_sriov(self) -> bool:
@@ -176,7 +201,11 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         from src.device_clone.constants import VENDOR_ID_INTEL
 
         # Convert enum to int if needed
-        intel_vendor_id = int(VENDOR_ID_INTEL) if hasattr(VENDOR_ID_INTEL, 'value') else VENDOR_ID_INTEL
+        intel_vendor_id = (
+            int(VENDOR_ID_INTEL)
+            if hasattr(VENDOR_ID_INTEL, "value")
+            else VENDOR_ID_INTEL
+        )
 
         # High-end devices (higher device IDs) more likely to support SR-IOV
         if (
@@ -240,14 +269,41 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         # Modern high-end network devices support resizable BAR for large buffers
         return self.device_id > DEVICE_ID_THRESHOLD_ADVANCED
 
-    def _supports_ptm(self) -> bool:
-        """Check if device likely supports PTM."""
-        # PTM mainly for high-speed Ethernet
+    def _supports_dsn(self) -> bool:
+        """Check if device likely supports Device Serial Number."""
+        # Most modern PCIe devices support DSN for identification
+        return self.device_id > DEVICE_ID_THRESHOLD_BASIC
+
+    def _supports_virtual_channel(self) -> bool:
+        """Check if device likely supports Virtual Channel (QoS)."""
+        # Enterprise/high-end devices with QoS requirements
         return (
-            self._device_category == "ethernet"
-            and self.device_id > DEVICE_ID_THRESHOLD_ADVANCED
-            and self._supports_sriov()
+            self.device_id > DEVICE_ID_THRESHOLD_HIGH_END
+            and self._device_category == "ethernet"
         )
+
+    def _supports_power_budgeting(self) -> bool:
+        """Check if device likely supports Power Budgeting."""
+        # Modern devices in power-constrained environments
+        return self.device_id > DEVICE_ID_THRESHOLD_ADVANCED
+
+    def _supports_ptm(self) -> bool:
+        """Check if device likely supports Precision Time Measurement."""
+        # High-end network devices needing precise time synchronization
+        return (
+            self.device_id > DEVICE_ID_THRESHOLD_HIGH_END
+            and self._device_category == "ethernet"
+        )
+
+    def _supports_l1pm(self) -> bool:
+        """Check if device likely supports L1 PM Substates."""
+        # Most modern devices support fine-grained power management
+        return self.device_id > DEVICE_ID_THRESHOLD_BASIC
+
+    def _supports_secondary_pcie(self) -> bool:
+        """Check if device likely supports Secondary PCIe (Gen4+)."""
+        # Ultra high-end devices with PCIe Gen4+ support
+        return self.device_id > DEVICE_ID_THRESHOLD_ULTRA_HIGH
 
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""

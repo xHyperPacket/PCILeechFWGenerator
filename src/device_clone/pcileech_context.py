@@ -1344,6 +1344,12 @@ class PCILeechContextBuilder:
             "supports_dpc",
             "supports_resizable_bar",
             "supports_ari",
+            "supports_dsn",
+            "supports_virtual_channel",
+            "supports_power_budgeting",
+            "supports_ptm",
+            "supports_l1pm",
+            "supports_secondary_pcie",
             "max_vfs",
             "num_vfs",
             "vf_stride",
@@ -1354,6 +1360,8 @@ class PCILeechContextBuilder:
             "ltr_max_snoop_latency",
             "ltr_max_no_snoop_latency",
             "resizable_bar_sizes",
+            "device_serial_low",
+            "device_serial_high",
         ):
             if hasattr(self.config, attr):
                 try:

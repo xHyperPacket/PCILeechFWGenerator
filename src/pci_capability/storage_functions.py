@@ -154,6 +154,31 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
             from .hex_constants import EXT_CAP_ID_ARI
             caps.add(EXT_CAP_ID_ARI)
 
+        # Add universal modern capabilities
+        if self._supports_dsn():
+            from src.device_clone.hex_constants import EXT_CAP_ID_DSN
+            caps.add(EXT_CAP_ID_DSN)
+
+        if self._supports_virtual_channel():
+            from src.device_clone.hex_constants import EXT_CAP_ID_VIRTUAL_CHANNEL
+            caps.add(EXT_CAP_ID_VIRTUAL_CHANNEL)
+
+        if self._supports_power_budgeting():
+            from src.device_clone.hex_constants import EXT_CAP_ID_POWER_BUDGETING
+            caps.add(EXT_CAP_ID_POWER_BUDGETING)
+
+        if self._supports_ptm():
+            from src.device_clone.hex_constants import EXT_CAP_ID_PTM
+            caps.add(EXT_CAP_ID_PTM)
+
+        if self._supports_l1pm():
+            from src.device_clone.hex_constants import EXT_CAP_ID_L1PM
+            caps.add(EXT_CAP_ID_L1PM)
+
+        if self._supports_secondary_pcie():
+            from src.device_clone.hex_constants import EXT_CAP_ID_SECONDARY_PCIE
+            caps.add(EXT_CAP_ID_SECONDARY_PCIE)
+
         return caps
 
     def _supports_aer(self) -> bool:
@@ -197,7 +222,10 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
     def _supports_tph(self) -> bool:
         """Check if device likely supports TPH (TLP Processing Hints)."""
         # TPH for performance optimization in high-end storage
-        return self._device_category in ["nvme", "sas"] and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        return (
+            self._device_category in ["nvme", "sas"]
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        )
 
     def _supports_ltr(self) -> bool:
         """Check if device likely supports LTR (Latency Tolerance Reporting)."""
@@ -212,7 +240,10 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
     def _supports_resizable_bar(self) -> bool:
         """Check if device likely supports Resizable BAR."""
         # Modern NVMe devices often support resizable BAR
-        return self._device_category == "nvme" and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        return (
+            self._device_category == "nvme"
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        )
 
     def _supports_acs(self) -> bool:
         """Check if device likely supports ACS (Access Control Services)."""
@@ -226,6 +257,46 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         """Check if device likely supports ARI (Alternative Routing-ID)."""
         # ARI for devices with many functions
         return self._supports_acs()
+
+    def _supports_dsn(self) -> bool:
+        """Check if device likely supports Device Serial Number."""
+        # Modern storage devices commonly have DSN for tracking/warranty
+        return self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["basic_storage"]
+
+    def _supports_virtual_channel(self) -> bool:
+        """Check if device likely supports Virtual Channel (QoS)."""
+        # Enterprise storage with QoS requirements
+        return (
+            self._device_category in ["nvme", "sas", "raid"]
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+        )
+
+    def _supports_power_budgeting(self) -> bool:
+        """Check if device likely supports Power Budgeting."""
+        # Modern storage devices support power budgeting
+        return self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["basic_storage"]
+
+    def _supports_ptm(self) -> bool:
+        """Check if device likely supports Precision Time Measurement."""
+        # Enterprise NVMe with time-sensitive operations
+        return (
+            self._device_category == "nvme"
+            and self.device_id
+            > STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+        )
+
+    def _supports_l1pm(self) -> bool:
+        """Check if device likely supports L1 PM Substates."""
+        # Most modern storage devices support power management substates
+        return self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["basic_storage"]
+
+    def _supports_secondary_pcie(self) -> bool:
+        """Check if device likely supports Secondary PCIe (Gen4+)."""
+        # High-end NVMe with PCIe Gen4+ support
+        return (
+            self._device_category == "nvme"
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        )
 
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""

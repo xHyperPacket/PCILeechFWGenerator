@@ -378,6 +378,12 @@ FFFFFFFF,
 {% set dpc_cfg = dpc if (dpc is defined) else safe_attr(device_config, 'dpc', {}) %}
 {% set resizable_bar_cfg = resizable_bar if (resizable_bar is defined) else safe_attr(device_config, 'resizable_bar', {}) %}
 {% set ari_cfg = ari if (ari is defined) else safe_attr(device_config, 'ari', {}) %}
+{% set dsn_cfg = dsn if (dsn is defined) else safe_attr(device_config, 'dsn', {}) %}
+{% set vc_cfg = virtual_channel if (virtual_channel is defined) else safe_attr(device_config, 'virtual_channel', {}) %}
+{% set power_budgeting_cfg = power_budgeting if (power_budgeting is defined) else safe_attr(device_config, 'power_budgeting', {}) %}
+{% set ptm_cfg = ptm if (ptm is defined) else safe_attr(device_config, 'ptm', {}) %}
+{% set l1pm_cfg = l1pm if (l1pm is defined) else safe_attr(device_config, 'l1pm', {}) %}
+{% set secondary_pcie_cfg = secondary_pcie if (secondary_pcie is defined) else safe_attr(device_config, 'secondary_pcie', {}) %}
 
 {% set supports_aer = (device_config.enable_advanced_features if (device_config is defined and device_config.enable_advanced_features is defined) else False) and aer_cfg %}
 {% set supports_acs = supports_aer or safe_attr(device_config, 'supports_acs', False) or (acs_cfg is defined and acs_cfg) %}
@@ -390,9 +396,18 @@ FFFFFFFF,
 {% set supports_dpc = safe_attr(device_config, 'supports_dpc', False) or (dpc_cfg is defined and dpc_cfg) %}
 {% set supports_resizable_bar = safe_attr(device_config, 'supports_resizable_bar', False) or (resizable_bar_cfg is defined and resizable_bar_cfg) %}
 {% set supports_ari = safe_attr(device_config, 'supports_ari', False) or (ari_cfg is defined and ari_cfg) %}
+{% set supports_dsn = safe_attr(device_config, 'supports_dsn', False) or (dsn_cfg is defined and dsn_cfg) %}
+{% set supports_vc = safe_attr(device_config, 'supports_virtual_channel', False) or (vc_cfg is defined and vc_cfg) %}
+{% set supports_power_budgeting = safe_attr(device_config, 'supports_power_budgeting', False) or (power_budgeting_cfg is defined and power_budgeting_cfg) %}
+{% set supports_ptm = safe_attr(device_config, 'supports_ptm', False) or (ptm_cfg is defined and ptm_cfg) %}
+{% set supports_l1pm = safe_attr(device_config, 'supports_l1pm', False) or (l1pm_cfg is defined and l1pm_cfg) %}
+{% set supports_secondary_pcie = safe_attr(device_config, 'supports_secondary_pcie', False) or (secondary_pcie_cfg is defined and secondary_pcie_cfg) %}
 
 {% set ext_caps = namespace(list=[]) %}
 {% if supports_aer %}{% set _ = ext_caps.list.append('aer') %}{% endif %}
+{% if supports_vc %}{% set _ = ext_caps.list.append('vc') %}{% endif %}
+{% if supports_dsn %}{% set _ = ext_caps.list.append('dsn') %}{% endif %}
+{% if supports_power_budgeting %}{% set _ = ext_caps.list.append('power_budgeting') %}{% endif %}
 {% if supports_acs %}{% set _ = ext_caps.list.append('acs') %}{% endif %}
 {% if supports_ats %}{% set _ = ext_caps.list.append('ats') %}{% endif %}
 {% if supports_sriov %}{% set _ = ext_caps.list.append('sriov') %}{% endif %}
@@ -401,6 +416,9 @@ FFFFFFFF,
 {% if supports_pri %}{% set _ = ext_caps.list.append('pri') %}{% endif %}
 {% if supports_tph %}{% set _ = ext_caps.list.append('tph') %}{% endif %}
 {% if supports_ltr %}{% set _ = ext_caps.list.append('ltr') %}{% endif %}
+{% if supports_secondary_pcie %}{% set _ = ext_caps.list.append('secondary_pcie') %}{% endif %}
+{% if supports_l1pm %}{% set _ = ext_caps.list.append('l1pm') %}{% endif %}
+{% if supports_ptm %}{% set _ = ext_caps.list.append('ptm') %}{% endif %}
 {% if supports_resizable_bar %}{% set _ = ext_caps.list.append('resizable_bar') %}{% endif %}
 {% if supports_dpc %}{% set _ = ext_caps.list.append('dpc') %}{% endif %}
 
@@ -417,7 +435,83 @@ FFFFFFFF,
 {% set ext_offset = EXTENDED_CFG_START %}
 {% for cap_name in ext_caps.list %}
   {# Compute capability-specific body and metadata #}
-  {% if cap_name == 'aer' %}
+  {% if cap_name == 'dsn' %}
+        {% set _dsn_lo = safe_attr(dsn_cfg, 'serial_number_low', safe_attr(device_config, 'device_serial_low', 0x12345678)) | safe_int(0x12345678) %}
+        {% set _dsn_hi = safe_attr(dsn_cfg, 'serial_number_high', safe_attr(device_config, 'device_serial_high', 0x9ABCDEF0)) | safe_int(0x9ABCDEF0) %}
+        {% set body = [
+            _dsn_lo,
+            _dsn_hi,
+        ] %}
+        {% set cap_id = 0x0003 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'vc' %}
+        {% set _vc_count = safe_attr(vc_cfg, 'extended_vc_count', 0) | safe_int(0) %}
+        {% set _vc_arb = safe_attr(vc_cfg, 'vc_arbitration', 0) | safe_int(0) %}
+        {% set _vc_caps = (_vc_count & 0x7) | ((_vc_arb & 0xF) << 4) %}
+        {% set body = [
+            _vc_caps,
+            0,
+            0,
+        ] %}
+        {% set cap_id = 0x0002 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'power_budgeting' %}
+        {% set _pb_ds = safe_attr(power_budgeting_cfg, 'data_select', 0) | safe_int(0) %}
+        {% set _pb_data = safe_attr(power_budgeting_cfg, 'power_data', 0) | safe_int(0) %}
+        {% set _pb_caps = safe_attr(power_budgeting_cfg, 'capabilities', 0) | safe_int(0) %}
+        {% set body = [
+            _pb_ds,
+            _pb_data,
+            _pb_caps,
+        ] %}
+        {% set cap_id = 0x0004 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'ptm' %}
+        {% set _ptm_requester = safe_attr(ptm_cfg, 'requester_capable', True) %}
+        {% set _ptm_responder = safe_attr(ptm_cfg, 'responder_capable', True) %}
+        {% set _ptm_root = safe_attr(ptm_cfg, 'root_capable', False) %}
+        {% set _ptm_granularity = safe_attr(ptm_cfg, 'local_clock_granularity', 0xA0) | safe_int(0xA0) %}
+        {% set _ptm_caps = ((1 if _ptm_requester else 0) << 0) | ((1 if _ptm_responder else 0) << 1) | ((1 if _ptm_root else 0) << 2) | (_ptm_granularity << 8) %}
+        {% set body = [
+            _ptm_caps,
+            0,
+        ] %}
+        {% set cap_id = 0x001F %}
+        {% set version = 1 %}
+    {% elif cap_name == 'l1pm' %}
+        {% set _l1pm_aspm_l1_1 = safe_attr(l1pm_cfg, 'aspm_l1_1_supported', True) %}
+        {% set _l1pm_aspm_l1_2 = safe_attr(l1pm_cfg, 'aspm_l1_2_supported', True) %}
+        {% set _l1pm_pci_pm_l1_1 = safe_attr(l1pm_cfg, 'pci_pm_l1_1_supported', True) %}
+        {% set _l1pm_pci_pm_l1_2 = safe_attr(l1pm_cfg, 'pci_pm_l1_2_supported', True) %}
+        {% set _l1pm_cm_restore = safe_attr(l1pm_cfg, 'common_mode_restore_time', 0) | safe_int(0) %}
+        {% set _l1pm_tpoweron = safe_attr(l1pm_cfg, 't_power_on_scale', 0) | safe_int(0) %}
+        {% set _l1pm_caps = (
+            ((1 if _l1pm_aspm_l1_1 else 0) << 0)
+            | ((1 if _l1pm_aspm_l1_2 else 0) << 1)
+            | ((1 if _l1pm_pci_pm_l1_1 else 0) << 2)
+            | ((1 if _l1pm_pci_pm_l1_2 else 0) << 3)
+            | ((_l1pm_cm_restore & 0xFF) << 8)
+            | ((_l1pm_tpoweron & 0x1F) << 19)
+        ) %}
+        {% set body = [
+            _l1pm_caps,
+            0,
+            0,
+        ] %}
+        {% set cap_id = 0x001E %}
+        {% set version = 1 %}
+    {% elif cap_name == 'secondary_pcie' %}
+        {% set _sec_link_ctrl3 = safe_attr(secondary_pcie_cfg, 'link_control_3', 0) | safe_int(0) %}
+        {% set _sec_lane_err = safe_attr(secondary_pcie_cfg, 'lane_error_status', 0) | safe_int(0) %}
+        {% set _sec_eq_ctrl = safe_attr(secondary_pcie_cfg, 'equalization_control', 0) | safe_int(0) %}
+        {% set body = [
+            _sec_link_ctrl3,
+            _sec_lane_err,
+            _sec_eq_ctrl,
+        ] %}
+        {% set cap_id = 0x0019 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'aer' %}
     {% set body = [
       0,  # Uncorrectable Error Status
       (aer_cfg.uncorrectable_error_mask if (aer_cfg is defined and (aer_cfg.uncorrectable_error_mask is defined)) else 0) | safe_int(0),
