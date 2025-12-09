@@ -12,9 +12,9 @@
 #   - Target device present and not passed through to another driver/VM.
 #
 # Usage:
-#   sudo ./scripts/donor_dump_live_usb.sh <BDF> <BOARD> [DATASTORE_DIR]
+#   sudo ./scripts/donor_dump_live_usb.sh <BDF> <BOARD> [DATASTORE_DIR] [--with-module]
 # Example:
-#   sudo ./scripts/donor_dump_live_usb.sh 0000:03:00.0 xupvvh /mnt/pcileech_datastore
+#   sudo ./scripts/donor_dump_live_usb.sh 0000:03:00.0 xupvvh /mnt/pcileech_datastore --with-module
 #
 # Notes:
 #   - DATASTORE_DIR defaults to ./pcileech_datastore if not provided.
@@ -25,13 +25,19 @@
 #       * vpd.bin (if readable)
 #       * lspci-*.txt (diagnostic context)
 #       * sysfs snapshots: resource(+resourceN), config.bin, ids, driver/iommu metadata
+#       * donor_info.txt/json from donor_dump.ko when --with-module is used
 #   - After collection, copy the datastore to your build machine and run the
 #     normal build flow pointing --datastore at that directory.
 
 set -euo pipefail
 
+WITH_MODULE=0
+if [[ "${4:-}" == "--with-module" || "${5:-}" == "--with-module" || "${WITH_MODULE:-0}" == "1" ]]; then
+  WITH_MODULE=1
+fi
+
 if [[ $# -lt 2 ]]; then
-  echo "Usage: sudo $0 <BDF> <BOARD> [DATASTORE_DIR]" >&2
+  echo "Usage: sudo $0 <BDF> <BOARD> [DATASTORE_DIR] [--with-module]" >&2
   exit 1
 fi
 
@@ -53,6 +59,12 @@ echo "[prep] Installing minimal dependencies (python3-venv, pciutils)..."
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
   python3 python3-venv python3-pip pciutils git
+
+if [[ $WITH_MODULE -eq 1 ]]; then
+  echo "[prep] Installing kernel build deps (headers, build-essential, dkms)..."
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    linux-headers-$(uname -r) build-essential dkms
+fi
 
 echo "[prep] Checking for IOMMU kernel flags (informational)..."
 if grep -Eq "(intel|amd)_iommu=on" /proc/cmdline; then
@@ -117,6 +129,39 @@ python pcileech.py build \
   --host-collect-only \
   --datastore "$DATASTORE" \
   --container-mode local
+
+if [[ $WITH_MODULE -eq 1 ]]; then
+  echo "[module] Building donor_dump.ko..."
+  make -C src/donor_dump clean
+  make -C src/donor_dump
+
+  echo "[module] Loading donor_dump.ko for $BDF..."
+  insmod src/donor_dump/donor_dump.ko bdf="$BDF"
+  if [[ -r /proc/donor_dump ]]; then
+    cat /proc/donor_dump > "$DATASTORE/donor_info.txt" || true
+    echo "[module] Captured /proc/donor_dump to donor_info.txt"
+    python - "$DATASTORE/donor_info.txt" "$DATASTORE/donor_info.json" <<'PY'
+import json, sys
+from pathlib import Path
+
+raw = Path(sys.argv[1])
+out = Path(sys.argv[2])
+data = {}
+for line in raw.read_text().splitlines():
+    if ':' not in line:
+        continue
+    k, v = line.split(':', 1)
+    data[k.strip()] = v.strip()
+out.write_text(json.dumps(data, indent=2))
+print(f"Wrote {out}")
+PY
+  else
+    echo "[module] /proc/donor_dump not readable"
+  fi
+
+  echo "[module] Unloading donor_dump.ko..."
+  rmmod donor_dump || true
+fi
 
 # Optional: capture VPD if available
 echo "[collect] Capturing VPD (if exposed)..."
