@@ -31,6 +31,24 @@ from .vfio_constants import (
 logger = logging.getLogger(__name__)
 
 
+def _allow_degraded() -> bool:
+    """Return True if degraded VFIO checks are allowed via env toggle."""
+    return str(os.environ.get("PCILEECH_VFIO_ALLOW_DEGRADED", "")).lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _fail_or_warn(msg: str) -> None:
+    """Raise OSError by default; warn if degraded mode is enabled."""
+    if _allow_degraded():
+        log_warning_safe(logger, msg + " (continuing in degraded mode)", prefix="VFIO")
+        return
+    raise OSError(msg)
+
+
 def check_vfio_prerequisites() -> None:
     """Check VFIO prerequisites before attempting device operations.
 
@@ -41,11 +59,7 @@ def check_vfio_prerequisites() -> None:
 
     # Check if VFIO container device exists
     if not os.path.exists("/dev/vfio/vfio"):
-        log_warning_safe(
-            logger,
-            "[TODO HARDEN] VFIO container device /dev/vfio/vfio not found. Proceeding with warning.",
-            prefix="VFIO",
-        )
+        _fail_or_warn("VFIO container device /dev/vfio/vfio not found")
         return
 
     # Check if we can access the VFIO container
@@ -54,28 +68,16 @@ def check_vfio_prerequisites() -> None:
         test_fd = os.open("/dev/vfio/vfio", os.O_RDWR)
         os.close(test_fd)
     except PermissionError:
-        log_warning_safe(
-            logger,
-            "[TODO HARDEN] Permission denied accessing /dev/vfio/vfio. Proceeding with warning.",
-            prefix="VFIO",
-        )
+        _fail_or_warn("Permission denied accessing /dev/vfio/vfio")
         return
     except OSError as e:
-        log_warning_safe(
-            logger,
-            f"[TODO HARDEN] Failed to access VFIO container: {e}. Proceeding with warning.",
-            prefix="VFIO",
-        )
+        _fail_or_warn(f"Failed to access VFIO container: {e}")
         return
 
     # Check if vfio-pci driver is available
     vfio_pci_path = "/sys/bus/pci/drivers/vfio-pci"
     if not os.path.exists(vfio_pci_path):
-        log_warning_safe(
-            logger,
-            "[TODO HARDEN] vfio-pci driver not found. Proceeding with warning.",
-            prefix="VFIO",
-        )
+        _fail_or_warn("vfio-pci driver not found in /sys/bus/pci/drivers")
         return
 
     log_debug_safe(logger, "VFIO prerequisites check passed", prefix="VFIO")
@@ -99,10 +101,12 @@ def check_iommu_group_binding(group: str) -> None:
 
     group_devices_path = f"/sys/kernel/iommu_groups/{group}/devices"
     if not os.path.exists(group_devices_path):
-        log_warning_safe(
-            logger,
-            f"[TODO HARDEN] IOMMU group {group} devices path not found: {group_devices_path}. Proceeding with warning.",
-            prefix="VFIO",
+        _fail_or_warn(
+            safe_format(
+                "IOMMU group {group} devices path not found: {path}",
+                group=group,
+                path=group_devices_path,
+            )
         )
         return
 
@@ -132,17 +136,20 @@ def check_iommu_group_binding(group: str) -> None:
                 unbound_devices.append(device)
 
         if unbound_devices or wrong_driver_devices:
-            warn_msg = f"IOMMU group {group} has devices not bound to vfio-pci:\n"
+            warn_lines = [
+                safe_format(
+                    "IOMMU group {group} has devices not bound to vfio-pci:",
+                    group=group,
+                )
+            ]
             if unbound_devices:
-                warn_msg += f"  Unbound devices: {unbound_devices}\n"
+                warn_lines.append(f"  Unbound devices: {unbound_devices}")
             if wrong_driver_devices:
-                warn_msg += f"  Wrong driver devices: {wrong_driver_devices}\n"
-            warn_msg += "All devices in an IOMMU group should be bound to vfio-pci for VFIO to work. Proceeding with warning."
-            log_warning_safe(
-                logger,
-                warn_msg,
-                prefix="VFIO",
+                warn_lines.append(f"  Wrong driver devices: {wrong_driver_devices}")
+            warn_lines.append(
+                "All devices in an IOMMU group must be bound to vfio-pci for VFIO to work."
             )
+            _fail_or_warn("\n".join(warn_lines))
             return
 
         log_debug_safe(
@@ -153,10 +160,12 @@ def check_iommu_group_binding(group: str) -> None:
         )
 
     except OSError as e:
-        log_warning_safe(
-            logger,
-            f"[TODO HARDEN] Failed to check IOMMU group {group} bindings: {e}. Proceeding with warning.",
-            prefix="VFIO",
+        _fail_or_warn(
+            safe_format(
+                "Failed to check IOMMU group {group} bindings: {err}",
+                group=group,
+                err=e,
+            )
         )
         return
 
@@ -184,14 +193,12 @@ def ensure_device_vfio_binding(bdf: str) -> str:
                     prefix="VFIO",
                 )
         except Exception as e:
-            log_warning_safe(
-                logger,
+            _fail_or_warn(
                 safe_format(
-                    "Failed to read current driver for {bdf}: {error}. Proceeding with warning.",
+                    "Failed to read current driver for {bdf}: {error}",
                     bdf=bdf,
                     error=e,
-                ),
-                prefix="VFIO",
+                )
             )
             pass
 
@@ -200,28 +207,24 @@ def ensure_device_vfio_binding(bdf: str) -> str:
 
     sysfs_path = f"/sys/bus/pci/devices/{bdf}/iommu_group"
     if not os.path.exists(sysfs_path):
-        log_warning_safe(
-            logger,
+        _fail_or_warn(
             safe_format(
-                "Device {bdf} has no IOMMU group (path not found: {sysfs_path}). Proceeding with warning.",
+                "Device {bdf} has no IOMMU group (path not found: {sysfs_path})",
                 bdf=bdf,
                 sysfs_path=sysfs_path,
-            ),
-            prefix="VFIO",
+            )
         )
         return "unknown"
 
     try:
         group = os.path.basename(os.readlink(sysfs_path))
     except Exception as e:
-        log_warning_safe(
-            logger,
+        _fail_or_warn(
             safe_format(
-                "Failed to read IOMMU group for {bdf}: {error}. Proceeding with warning.",
+                "Failed to read IOMMU group for {bdf}: {error}",
                 bdf=bdf,
                 error=e,
-            ),
-            prefix="VFIO",
+            )
         )
         return "unknown"
 

@@ -102,6 +102,7 @@ For complete setup including IOMMU configuration, see the **[Installation Guide]
 - **Python ≥ 3.11**
 - **Donor PCIe card** (any inexpensive NIC, sound, or capture card)
 - **Linux OS** with VFIO support (required for Stage 1 data collection)
+- **Donor dumping is Linux-only** — Windows/macOS can run templating offline using a sample datastore but cannot collect donor data.
 
 ### Optional Requirements
 
@@ -145,6 +146,17 @@ The tool automatically checks for newer versions during CLI builds. You can:
 
 - Disable automatic checks: set `PCILEECH_DISABLE_UPDATE_CHECK=1`
 - Show current version: `pcileech version`
+
+### Offline / Sample Datastore (no hardware)
+
+If you're on Windows/macOS or developing without donor hardware, you can still exercise templating using the bundled sample datastore:
+
+- Run with host-context-only sample data:
+    - `python -m pcileechfwgenerator.build --use-sample-datastore --board <board>` (no VFIO access attempted)
+- Or point to your own captured datastore:
+    - `python -m pcileechfwgenerator.build --sample-datastore /path/to/datastore --board <board>`
+
+These modes skip VFIO entirely and are suitable only for offline development/templating. Real donor dumps still require Linux with VFIO.
 
 
 ### Development from Repository

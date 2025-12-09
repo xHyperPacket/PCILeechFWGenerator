@@ -208,6 +208,7 @@ class BuildConfiguration:
     # MMIO learning for dynamic BAR models
     enable_mmio_learning: bool = True
     force_recapture: bool = False
+    sample_datastore: Optional[Path] = None
 
 
 @dataclass(slots=True)
@@ -953,8 +954,13 @@ class ConfigurationManager:
         )
         force_recapture = getattr(args, "force_recapture", False)
 
+        bdf_value = args.bdf
+        if not bdf_value:
+            # In host-context/sample mode we still need a placeholder BDF
+            bdf_value = "0000:00:00.0"
+
         return BuildConfiguration(
-            bdf=args.bdf,
+            bdf=bdf_value,
             board=args.board,
             output_dir=Path(args.output).resolve(),
             enable_profiling=enable_profiling,
@@ -969,6 +975,7 @@ class ConfigurationManager:
             disable_vfio=disable_vfio,
             enable_mmio_learning=enable_mmio_learning,
             force_recapture=force_recapture,
+            sample_datastore=getattr(args, "sample_datastore", None),
         )
 
     def extract_device_config(
@@ -1102,12 +1109,15 @@ class ConfigurationManager:
         Raises:
             ConfigurationError: If validation fails
         """
-        # Validate BDF format
-        if not self._is_valid_bdf(args.bdf):
-            raise ConfigurationError(
-                f"Invalid BDF format: {args.bdf}. "
-                "Expected format: XXXX:XX:XX.X (e.g., 0000:03:00.0)"
-            )
+        # Validate BDF format (skip when using sample datastore or host-context-only)
+        if not getattr(args, "sample_datastore", None) and not getattr(
+            args, "host_context_only", False
+        ):
+            if not self._is_valid_bdf(args.bdf):
+                raise ConfigurationError(
+                    f"Invalid BDF format: {args.bdf}. "
+                    "Expected format: XXXX:XX:XX.X (e.g., 0000:03:00.0)"
+                )
 
         # Validate profile duration
         if args.profile < 0:
@@ -2303,7 +2313,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
     parser.add_argument(
         "--bdf",
-        required=True,
+        required=False,
         help="PCI Bus/Device/Function address (e.g., 0000:03:00.0)",
     )
     parser.add_argument(
@@ -2341,6 +2351,21 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "Do not touch VFIO/sysfs; require DEVICE_CONTEXT_PATH/MSIX_DATA_PATH"
+        ),
+    )
+    parser.add_argument(
+        "--sample-datastore",
+        help=(
+            "Path to a sample datastore directory containing device_context.json "
+            "and msix_data.json. Enables host-context-only mode automatically."
+        ),
+    )
+    parser.add_argument(
+        "--use-sample-datastore",
+        action="store_true",
+        help=(
+            "Use the bundled sample datastore (configs/samples/datastore) for "
+            "offline/local runs without hardware. Implies --host-context-only."
         ),
     )
     parser.add_argument(
@@ -2469,6 +2494,24 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         # Parse arguments
         args = parse_args(argv)
+
+        # Resolve bundled sample datastore if requested
+        if getattr(args, "use_sample_datastore", False):
+            bundled = Path(__file__).resolve().parent.parent / "configs" / "samples" / "datastore"
+            args.sample_datastore = str(bundled)
+            # Implicitly enable host-context-only behavior
+            args.host_context_only = True
+
+        # If a sample datastore was provided, wire environment for host-context-only
+        if getattr(args, "sample_datastore", None):
+            sample_base = Path(args.sample_datastore).expanduser().resolve()
+            os.environ["DEVICE_CONTEXT_PATH"] = str(sample_base / "device_context.json")
+            os.environ["MSIX_DATA_PATH"] = str(sample_base / "msix_data.json")
+            os.environ["PCILEECH_HOST_CONTEXT_ONLY"] = "1"
+            args.host_context_only = True
+            # Provide a placeholder BDF if none was supplied
+            if not args.bdf:
+                args.bdf = "0000:00:00.0"
 
         # Create configuration
         config_manager = ConfigurationManager(logger)

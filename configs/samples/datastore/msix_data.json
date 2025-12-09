@@ -1,0 +1,8 @@
+{
+  "bdf": "0000:00:00.0",
+  "msix_info": {
+    "is_supported": false,
+    "table_size": 0
+  },
+  "config_space_hex": null
+}
