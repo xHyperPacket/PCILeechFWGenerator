@@ -1330,6 +1330,26 @@ class PCILeechContextBuilder:
             ),
         }
 
+        # Optional advanced capability flags (propagate when provided to enable
+        # extended capability emission in templates without forcing defaults).
+        for attr in (
+            "supports_sriov",
+            "supports_ats",
+            "supports_acs",
+            "supports_aer",
+            "max_vfs",
+            "num_vfs",
+            "vf_stride",
+            "vf_offset",
+            "ats_stu",
+        ):
+            if hasattr(self.config, attr):
+                try:
+                    device_config_dict[attr] = getattr(self.config, attr)
+                except Exception:
+                    # Ignore bad attribute access to keep context building resilient
+                    pass
+
         # Add hex representations
         if identifiers.subsystem_vendor_id:
             device_config_dict["subsystem_vendor_id_hex"] = safe_format(

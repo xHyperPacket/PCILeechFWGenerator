@@ -365,13 +365,139 @@ FFFFFFFF,
 ; =====================================================================
 ; Extended Configuration Space ({{ EXTENDED_CFG_START }}-{{ EXTENDED_CFG_END - 1 }})
 ; =====================================================================
+{# Determine optional extended capabilities. All fields are defensive to keep
+   legacy contexts working without additional inputs. #}
+{% set aer_cfg = aer if (aer is defined and aer) else {} %}
+{% set acs_cfg = acs if (acs is defined) else safe_attr(device_config, 'acs', {}) %}
+{% set ats_cfg = ats if (ats is defined) else safe_attr(device_config, 'ats', {}) %}
+{% set sriov_cfg = sriov if (sriov is defined) else safe_attr(device_config, 'sriov', {}) %}
+
+{% set supports_aer = (device_config.enable_advanced_features if (device_config is defined and device_config.enable_advanced_features is defined) else False) and aer_cfg %}
+{% set supports_acs = supports_aer or safe_attr(device_config, 'supports_acs', False) or (acs_cfg is defined and acs_cfg) %}
+{% set supports_ats = safe_attr(device_config, 'supports_ats', False) or (ats_cfg is defined and ats_cfg) %}
+{% set supports_sriov = safe_attr(device_config, 'supports_sriov', False) or (sriov_cfg is defined and sriov_cfg) %}
+
+{% set ext_caps = namespace(list=[]) %}
+{% if supports_aer %}{% set _ = ext_caps.list.append('aer') %}{% endif %}
+{% if supports_acs %}{% set _ = ext_caps.list.append('acs') %}{% endif %}
+{% if supports_ats %}{% set _ = ext_caps.list.append('ats') %}{% endif %}
+{% if supports_sriov %}{% set _ = ext_caps.list.append('sriov') %}{% endif %}
+
+{% if ext_caps.list|length == 0 %}
 ; Mostly zeros for basic implementation
 {% for i in range(EXTENDED_CFG_START, EXTENDED_CFG_END, 4) %}
 {% if loop.index % 16 == 1 %}
 ; Offset {{ "%03X" % (i | safe_int(0)) }}
 {% endif %}
 00000000{% if not loop.last %},{% endif %}
-{% endfor %};
+{% endfor %}
+{% else %}
+; Extended Capabilities emitted ({{ ext_caps.list|join(', ') }})
+{% set ext_offset = EXTENDED_CFG_START %}
+{% for cap_name in ext_caps.list %}
+  {# Compute capability-specific body and metadata #}
+  {% if cap_name == 'aer' %}
+    {% set body = [
+      0,  # Uncorrectable Error Status
+      (aer_cfg.uncorrectable_error_mask if (aer_cfg is defined and (aer_cfg.uncorrectable_error_mask is defined)) else 0) | safe_int(0),
+      (aer_cfg.uncorrectable_error_severity if (aer_cfg is defined and (aer_cfg.uncorrectable_error_severity is defined)) else 0) | safe_int(0),
+      0,  # Correctable Error Status
+      (aer_cfg.correctable_error_mask if (aer_cfg is defined and (aer_cfg.correctable_error_mask is defined)) else 0) | safe_int(0),
+      (aer_cfg.advanced_error_capabilities if (aer_cfg is defined and (aer_cfg.advanced_error_capabilities is defined)) else 0) | safe_int(0),
+      0,0,0,0,  # Header Log
+      0,  # Root Error Command
+      0,  # Root Error Status
+      0,  # Error Source ID
+      0,0,0,  # Reserved / impl defined
+    ] %}
+    {% set cap_id = 0x0001 %}
+    {% set version = 1 %}
+  {% elif cap_name == 'acs' %}
+    {% set _acs_src = safe_attr(acs_cfg, 'source_validation', True) %}
+    {% set _acs_tblk = safe_attr(acs_cfg, 'translation_blocking', True) %}
+    {% set _acs_req = safe_attr(acs_cfg, 'p2p_request_redirect', True) %}
+    {% set _acs_cmp = safe_attr(acs_cfg, 'p2p_completion_redirect', True) %}
+    {% set _acs_up = safe_attr(acs_cfg, 'upstream_forwarding', True) %}
+    {% set _acs_egr = safe_attr(acs_cfg, 'p2p_egress_control', False) %}
+    {% set _acs_dtp = safe_attr(acs_cfg, 'direct_translated_p2p', False) %}
+    {% set _acs_caps = (
+      (1 if _acs_src else 0)
+      | ((1 if _acs_tblk else 0) << 1)
+      | ((1 if _acs_req else 0) << 2)
+      | ((1 if _acs_cmp else 0) << 3)
+      | ((1 if _acs_up else 0) << 4)
+      | ((1 if _acs_egr else 0) << 5)
+      | ((1 if _acs_dtp else 0) << 6)
+    ) %}
+    {% set body = [
+      _acs_caps,
+      _acs_caps,  # Mirror capabilities into control for permissive default
+      0,          # ACS Status (reserved/clear)
+    ] %}
+    {% set cap_id = 0x000D %}
+    {% set version = 1 %}
+  {% elif cap_name == 'ats' %}
+    {% set _ats_stu = (safe_attr(ats_cfg, 'max_stu', safe_attr(device_config, 'ats_stu', 0x8)) | safe_int(0)) & 0x1F %}
+    {% set _ats_caps = _ats_stu %}
+    {% set _ats_ctrl = safe_attr(ats_cfg, 'control', 0) | safe_int(0) %}
+    {% set body = [
+      _ats_caps,
+      _ats_ctrl,
+    ] %}
+    {% set cap_id = 0x000F %}
+    {% set version = 1 %}
+  {% elif cap_name == 'sriov' %}
+    {% set _total_vfs = safe_attr(sriov_cfg, 'total_vfs', safe_attr(device_config, 'max_vfs', 0)) | safe_int(0) %}
+    {% set _initial_vfs = safe_attr(sriov_cfg, 'initial_vfs', safe_attr(device_config, 'num_vfs', _total_vfs)) | safe_int(0) %}
+    {% set _num_vf_bars = safe_attr(sriov_cfg, 'num_vf_bars', 6) | safe_int(0) %}
+    {% set _vf_device_id = safe_attr(
+      sriov_cfg,
+      'vf_device_id',
+      (safe_int(device_config.device_id) + 1 if (device_config is defined and device_config.device_id is defined) else 0),
+    ) | safe_int(0) %}
+    {% set _first_vf_offset = safe_attr(sriov_cfg, 'first_vf_offset', safe_attr(device_config, 'vf_offset', 0x100)) | safe_int(0) %}
+    {% set _vf_stride = safe_attr(sriov_cfg, 'vf_stride', safe_attr(device_config, 'vf_stride', 0x10)) | safe_int(0) %}
+    {% set _supported_page_sizes = safe_attr(sriov_cfg, 'supported_page_sizes', 0x3) | safe_int(0) %}
+    {% set _system_page_size = safe_attr(sriov_cfg, 'system_page_size', 0x1) | safe_int(0) %}
+    {% set body = [
+      0,              # SR-IOV Capability flags (permissive default)
+      0,              # SR-IOV Control
+      0,              # SR-IOV Status
+      _initial_vfs,   # Initial VFs
+      _total_vfs,     # Total VFs
+      _initial_vfs,   # Num VFs (runtime configurable)
+      0,              # Function Dependency Link
+      _first_vf_offset,  # First VF Offset
+      _vf_stride,     # VF Stride
+      _vf_device_id,  # VF Device ID
+      _supported_page_sizes,  # Supported Page Sizes
+      _system_page_size,      # System Page Size
+      0,              # Reserved
+      0,              # VF Migration State
+    ] %}
+    {% set cap_id = 0x0010 %}
+    {% set version = 1 %}
+  {% else %}
+    {% set body = [] %}
+    {% set cap_id = 0 %}
+    {% set version = 1 %}
+  {% endif %}
+
+  {% set cap_bytes = (body|length + 1) * 4 %}
+  {% set next_offset = (ext_offset + cap_bytes) if not loop.last else 0 %}
+  {% set has_more_after = (not loop.last) or (next_offset < EXTENDED_CFG_END) %}
+  {% set header_word = ((next_offset | safe_int(0)) << 20) + ((version & 0xF) << 16) + (cap_id & 0xFFFF) %}
+{{ "%08X" % header_word }}{% if body or has_more_after %},{% endif %}
+  {% for word in body %}
+{{ "%08X" % (word | safe_int(0)) }}{% if not (loop.last and not has_more_after and next_offset >= EXTENDED_CFG_END) %},{% endif %}
+  {% endfor %}
+  {% set ext_offset = ext_offset + cap_bytes %}
+{% endfor %}
+  {% for i in range(ext_offset, EXTENDED_CFG_END, 4) %}
+{% if loop.index0 % 16 == 0 %}; Offset {{ "%03X" % ((ext_offset + (loop.index0*4)) | safe_int(0)) }}{% endif %}
+00000000{% if not loop.last %},{% endif %}
+  {% endfor %}
+{% endif %};
 
 ; =====================================================================
 ; PCILeech-Specific Configuration Metadata

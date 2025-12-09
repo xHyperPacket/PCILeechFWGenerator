@@ -74,6 +74,7 @@ class DonorInfoTemplateGenerator:
                     "supports_sriov": None,  # User to fill: true/false
                     "num_vfs": None,  # User to fill if SR-IOV supported
                     "supports_ats": None,  # User to fill: Address Translation Service
+                    "supports_acs": None,  # User to fill: Access Control Services
                     "supports_pri": None,  # User to fill: Page Request Interface
                     "supports_pasid": None,  # User to fill: Process Address Space ID
                     "pasid_width": None,  # User to fill if PASID supported
