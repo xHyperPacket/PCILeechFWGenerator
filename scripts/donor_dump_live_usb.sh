@@ -18,8 +18,13 @@
 #
 # Notes:
 #   - DATASTORE_DIR defaults to ./pcileech_datastore if not provided.
-#   - Run from the repository root. The resulting datastore contains
-#     device_context.json and msix_data.json.
+#   - Run from the repository root. The resulting datastore contains:
+#       * device_context.json (PCI config space)
+#       * msix_data.json (MSI-X parse)
+#       * option_rom.bin + option_rom.json (if readable)
+#       * vpd.bin (if readable)
+#       * lspci-*.txt (diagnostic context)
+#       * resource file copy from sysfs (BAR layout)
 #   - After collection, copy the datastore to your build machine and run the
 #     normal build flow pointing --datastore at that directory.
 
@@ -67,6 +72,19 @@ pip install -r requirements.txt
 
 mkdir -p "$DATASTORE"
 
+# Paths
+SYSFS_PATH="/sys/bus/pci/devices/$BDF"
+
+echo "[collect] Capturing sysfs metadata snapshot..."
+if [[ -d "$SYSFS_PATH" ]]; then
+  cp -f "$SYSFS_PATH/resource" "$DATASTORE/resource" 2>/dev/null || true
+  lspci -vvnn -s "$BDF" > "$DATASTORE/lspci-vvnn.txt" 2>/dev/null || true
+  lspci -k -s "$BDF"    > "$DATASTORE/lspci-k.txt"    2>/dev/null || true
+  lspci -xxx -s "$BDF"  > "$DATASTORE/lspci-xxx.txt"  2>/dev/null || true
+else
+  echo "  WARNING: $SYSFS_PATH not found; device may be absent." >&2
+fi
+
 echo "[collect] Running host collection for BDF=$BDF → $DATASTORE"
 python pcileech.py build \
   --bdf "$BDF" \
@@ -75,6 +93,43 @@ python pcileech.py build \
   --datastore "$DATASTORE" \
   --container-mode local
 
+# Optional: capture VPD if available
+echo "[collect] Capturing VPD (if exposed)..."
+if [[ -r "$SYSFS_PATH/vpd" ]]; then
+  cat "$SYSFS_PATH/vpd" > "$DATASTORE/vpd.bin" 2>/dev/null || true
+  echo "  VPD captured to vpd.bin"
+else
+  echo "  VPD not readable or not present."
+fi
+
+# Optional: capture Option ROM if available
+echo "[collect] Capturing Option ROM (if exposed)..."
+if [[ -w "$SYSFS_PATH/rom" ]]; then
+  ROM_PATH="$SYSFS_PATH/rom"
+  # Enable ROM read
+  echo 1 > "$ROM_PATH" 2>/dev/null || true
+  if dd if="$ROM_PATH" of="$DATASTORE/option_rom.bin" status=none bs=4K 2>/dev/null; then
+    echo 0 > "$ROM_PATH" 2>/dev/null || true
+    # Record metadata
+    ROM_SIZE=$(stat -c%s "$DATASTORE/option_rom.bin" 2>/dev/null || echo 0)
+    ROM_SHA256=$(sha256sum "$DATASTORE/option_rom.bin" 2>/dev/null | awk '{print $1}')
+    cat > "$DATASTORE/option_rom.json" <<EOF
+{
+  "size_bytes": $ROM_SIZE,
+  "sha256": "${ROM_SHA256:-unknown}",
+  "source": "$ROM_PATH"
+}
+EOF
+    echo "  Option ROM captured (${ROM_SIZE} bytes)."
+  else
+    echo 0 > "$ROM_PATH" 2>/dev/null || true
+    echo "  Failed to read Option ROM (device or kernel may block access)."
+  fi
+else
+  echo "  Option ROM not exposed or not writable."
+fi
+
 echo "[done] Datastore ready at: $(realpath "$DATASTORE")"
 echo "       Files: device_context.json, msix_data.json"
+echo "              plus any captured: vpd.bin, option_rom.bin/json, lspci-*.txt, resource"
 echo "       Transfer this directory to your build machine and run the full build there."
