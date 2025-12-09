@@ -8,11 +8,18 @@ Read more about conftest.py under:
 """
 
 import logging
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
 import pytest
+
+if sys.platform != "linux":
+    def pytest_collection_modifyitems(config, items):
+        skip = pytest.mark.skip(reason="Test suite requires Linux platform")
+        for item in items:
+            item.add_marker(skip)
 
 
 @pytest.fixture

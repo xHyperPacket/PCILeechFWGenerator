@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-from string_utils import (
+from src.string_utils import (
     safe_format,
     log_info_safe,
     log_warning_safe,
@@ -26,6 +26,7 @@ LOG = logging.getLogger(__name__)
 
 # ───────────────────────── Constants ──────────────────────────
 IS_LINUX = platform.system().lower() == "linux"
+IS_SUPPORTED = platform.system().lower() in {"linux", "darwin"}
 
 DEFAULT_BASES: List[Path] = []
 if IS_LINUX:
@@ -35,16 +36,17 @@ if IS_LINUX:
         Path("/usr/local/Xilinx/Vivado"),
         Path.home() / "Xilinx" / "Vivado",
     ]
-    ## OSX isnt really supported this is for unit tests
 elif platform.system().lower() == "darwin":
+    # macOS is primarily for limited unit test coverage; not full support
     DEFAULT_BASES = [
         Path("/Applications/Xilinx/Vivado"),
         Path("/tools/Xilinx/Vivado"),
         Path("/usr/local/Xilinx/Vivado"),
         Path.home() / "Xilinx" / "Vivado",
     ]
-else:
-    raise RuntimeError("Vivado utilities are only supported on Linux.")
+
+if not IS_SUPPORTED:
+    log_warning_safe(LOG, "Vivado utilities are unsupported on this platform", prefix="Vivado")
 
 
 TOOLS_ROOT = Path("/tools/Xilinx")  # pattern: /tools/Xilinx/<version>/Vivado
