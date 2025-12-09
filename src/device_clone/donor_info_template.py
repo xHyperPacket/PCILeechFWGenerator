@@ -78,6 +78,11 @@ class DonorInfoTemplateGenerator:
                     "supports_pri": None,  # User to fill: Page Request Interface
                     "supports_pasid": None,  # User to fill: Process Address Space ID
                     "pasid_width": None,  # User to fill if PASID supported
+                    "supports_tph": None,  # User to fill: TLP Processing Hints
+                    "supports_ltr": None,  # User to fill: Latency Tolerance Reporting
+                    "supports_dpc": None,  # User to fill: Downstream Port Containment
+                    "supports_resizable_bar": None,  # User to fill: Resizable BAR support
+                    "supports_ari": None,  # User to fill: Alternative Routing-ID
                 },
                 "bars": [
                     {

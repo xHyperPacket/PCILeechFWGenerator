@@ -143,6 +143,31 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         if self._supports_ptm():
             caps.add(EXT_CAP_ID_PTM)
 
+        # Add new advanced capabilities
+        if self._supports_ats():
+            from .hex_constants import EXT_CAP_ID_ATS
+            caps.add(EXT_CAP_ID_ATS)
+
+        if self._supports_pri():
+            from .hex_constants import EXT_CAP_ID_PRI
+            caps.add(EXT_CAP_ID_PRI)
+
+        if self._supports_pasid():
+            from .hex_constants import EXT_CAP_ID_PASID
+            caps.add(EXT_CAP_ID_PASID)
+
+        if self._supports_tph():
+            from .hex_constants import EXT_CAP_ID_TPH
+            caps.add(EXT_CAP_ID_TPH)
+
+        if self._supports_dpc():
+            from .hex_constants import EXT_CAP_ID_DPC
+            caps.add(EXT_CAP_ID_DPC)
+
+        if self._supports_resizable_bar():
+            from .hex_constants import EXT_CAP_ID_RESIZABLE_BAR
+            caps.add(EXT_CAP_ID_RESIZABLE_BAR)
+
         return caps
 
     def _supports_sriov(self) -> bool:
@@ -177,6 +202,43 @@ class NetworkFunctionAnalyzer(BaseFunctionAnalyzer):
         """Check if device likely supports LTR."""
         # Most modern network devices support LTR
         return self.device_id > DEVICE_ID_THRESHOLD_BASIC
+
+    def _supports_ats(self) -> bool:
+        """Check if device likely supports ATS (Address Translation Services)."""
+        # ATS is common in SR-IOV devices and high-end network adapters for IOMMU
+        return self._supports_sriov() or (
+            self.device_id > DEVICE_ID_THRESHOLD_HIGH_END
+            and self._device_category == "ethernet"
+        )
+
+    def _supports_pri(self) -> bool:
+        """Check if device likely supports PRI (Page Request Interface)."""
+        # PRI requires ATS and is used for advanced memory management
+        return self._supports_ats() and self.device_id > DEVICE_ID_THRESHOLD_ULTRA_HIGH
+
+    def _supports_pasid(self) -> bool:
+        """Check if device likely supports PASID (Process Address Space ID)."""
+        # PASID requires ATS and enables process-level isolation
+        return self._supports_ats() and self.device_id > DEVICE_ID_THRESHOLD_ULTRA_HIGH
+
+    def _supports_tph(self) -> bool:
+        """Check if device likely supports TPH (TLP Processing Hints)."""
+        # TPH is for performance optimization in high-end devices
+        return (
+            self.device_id > DEVICE_ID_THRESHOLD_HIGH_END
+            and self._device_category == "ethernet"
+        )
+
+    def _supports_dpc(self) -> bool:
+        """Check if device likely supports DPC (Downstream Port Containment)."""
+        # DPC is typically a root port/switch feature, rare in endpoints
+        # Only ultra high-end NICs with embedded switch functionality
+        return False  # Network endpoints typically don't support DPC
+
+    def _supports_resizable_bar(self) -> bool:
+        """Check if device likely supports Resizable BAR."""
+        # Modern high-end network devices support resizable BAR for large buffers
+        return self.device_id > DEVICE_ID_THRESHOLD_ADVANCED
 
     def _supports_ptm(self) -> bool:
         """Check if device likely supports PTM."""

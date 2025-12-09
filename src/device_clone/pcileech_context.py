@@ -1337,11 +1337,23 @@ class PCILeechContextBuilder:
             "supports_ats",
             "supports_acs",
             "supports_aer",
+            "supports_pasid",
+            "supports_pri",
+            "supports_tph",
+            "supports_ltr",
+            "supports_dpc",
+            "supports_resizable_bar",
+            "supports_ari",
             "max_vfs",
             "num_vfs",
             "vf_stride",
             "vf_offset",
             "ats_stu",
+            "pasid_width",
+            "pri_max_requests",
+            "ltr_max_snoop_latency",
+            "ltr_max_no_snoop_latency",
+            "resizable_bar_sizes",
         ):
             if hasattr(self.config, attr):
                 try:

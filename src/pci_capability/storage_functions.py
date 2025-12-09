@@ -117,6 +117,43 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         if self._supports_aer():
             caps.add(EXT_CAP_ID_AER)
 
+        # Add new advanced capabilities
+        if self._supports_ats():
+            from .hex_constants import EXT_CAP_ID_ATS
+            caps.add(EXT_CAP_ID_ATS)
+
+        if self._supports_pri():
+            from .hex_constants import EXT_CAP_ID_PRI
+            caps.add(EXT_CAP_ID_PRI)
+
+        if self._supports_pasid():
+            from .hex_constants import EXT_CAP_ID_PASID
+            caps.add(EXT_CAP_ID_PASID)
+
+        if self._supports_tph():
+            from .hex_constants import EXT_CAP_ID_TPH
+            caps.add(EXT_CAP_ID_TPH)
+
+        if self._supports_ltr():
+            from .hex_constants import EXT_CAP_ID_LTR
+            caps.add(EXT_CAP_ID_LTR)
+
+        if self._supports_dpc():
+            from .hex_constants import EXT_CAP_ID_DPC
+            caps.add(EXT_CAP_ID_DPC)
+
+        if self._supports_resizable_bar():
+            from .hex_constants import EXT_CAP_ID_RESIZABLE_BAR
+            caps.add(EXT_CAP_ID_RESIZABLE_BAR)
+
+        if self._supports_acs():
+            from .hex_constants import EXT_CAP_ID_ACS
+            caps.add(EXT_CAP_ID_ACS)
+
+        if self._supports_ari():
+            from .hex_constants import EXT_CAP_ID_ARI
+            caps.add(EXT_CAP_ID_ARI)
+
         return caps
 
     def _supports_aer(self) -> bool:
@@ -130,6 +167,65 @@ class StorageFunctionAnalyzer(BaseFunctionAnalyzer):
         ):
             return True
         return False
+
+    def _supports_ats(self) -> bool:
+        """Check if device likely supports ATS (Address Translation Services)."""
+        # NVMe and high-end storage controllers support ATS for IOMMU
+        return self._device_category == "nvme" or (
+            self._device_category in ["sas", "raid"]
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+        )
+
+    def _supports_pri(self) -> bool:
+        """Check if device likely supports PRI (Page Request Interface)."""
+        # PRI requires ATS, mainly in NVMe with advanced features
+        return (
+            self._supports_ats()
+            and self._device_category == "nvme"
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+        )
+
+    def _supports_pasid(self) -> bool:
+        """Check if device likely supports PASID (Process Address Space ID)."""
+        # PASID requires ATS, used in NVMe for multi-process isolation
+        return (
+            self._supports_ats()
+            and self._device_category == "nvme"
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+        )
+
+    def _supports_tph(self) -> bool:
+        """Check if device likely supports TPH (TLP Processing Hints)."""
+        # TPH for performance optimization in high-end storage
+        return self._device_category in ["nvme", "sas"] and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+
+    def _supports_ltr(self) -> bool:
+        """Check if device likely supports LTR (Latency Tolerance Reporting)."""
+        # Most modern storage devices support LTR
+        return self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["basic_storage"]
+
+    def _supports_dpc(self) -> bool:
+        """Check if device likely supports DPC (Downstream Port Containment)."""
+        # DPC is typically a root port feature, not endpoint devices
+        return False
+
+    def _supports_resizable_bar(self) -> bool:
+        """Check if device likely supports Resizable BAR."""
+        # Modern NVMe devices often support resizable BAR
+        return self._device_category == "nvme" and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["high_end_storage"]
+
+    def _supports_acs(self) -> bool:
+        """Check if device likely supports ACS (Access Control Services)."""
+        # Enterprise storage with multi-function support
+        return (
+            self._device_category in ["nvme", "sas", "raid"]
+            and self.device_id > STORAGE_DEVICE_ID_THRESHOLDS["enterprise_storage"]
+        )
+
+    def _supports_ari(self) -> bool:
+        """Check if device likely supports ARI (Alternative Routing-ID)."""
+        # ARI for devices with many functions
+        return self._supports_acs()
 
     def get_device_class_code(self) -> int:
         """Get appropriate PCI class code for this device."""

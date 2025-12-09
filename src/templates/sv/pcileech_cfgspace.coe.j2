@@ -371,17 +371,38 @@ FFFFFFFF,
 {% set acs_cfg = acs if (acs is defined) else safe_attr(device_config, 'acs', {}) %}
 {% set ats_cfg = ats if (ats is defined) else safe_attr(device_config, 'ats', {}) %}
 {% set sriov_cfg = sriov if (sriov is defined) else safe_attr(device_config, 'sriov', {}) %}
+{% set pasid_cfg = pasid if (pasid is defined) else safe_attr(device_config, 'pasid', {}) %}
+{% set pri_cfg = pri if (pri is defined) else safe_attr(device_config, 'pri', {}) %}
+{% set tph_cfg = tph if (tph is defined) else safe_attr(device_config, 'tph', {}) %}
+{% set ltr_cfg = ltr if (ltr is defined) else safe_attr(device_config, 'ltr', {}) %}
+{% set dpc_cfg = dpc if (dpc is defined) else safe_attr(device_config, 'dpc', {}) %}
+{% set resizable_bar_cfg = resizable_bar if (resizable_bar is defined) else safe_attr(device_config, 'resizable_bar', {}) %}
+{% set ari_cfg = ari if (ari is defined) else safe_attr(device_config, 'ari', {}) %}
 
 {% set supports_aer = (device_config.enable_advanced_features if (device_config is defined and device_config.enable_advanced_features is defined) else False) and aer_cfg %}
 {% set supports_acs = supports_aer or safe_attr(device_config, 'supports_acs', False) or (acs_cfg is defined and acs_cfg) %}
 {% set supports_ats = safe_attr(device_config, 'supports_ats', False) or (ats_cfg is defined and ats_cfg) %}
 {% set supports_sriov = safe_attr(device_config, 'supports_sriov', False) or (sriov_cfg is defined and sriov_cfg) %}
+{% set supports_pasid = safe_attr(device_config, 'supports_pasid', False) or (pasid_cfg is defined and pasid_cfg) %}
+{% set supports_pri = safe_attr(device_config, 'supports_pri', False) or (pri_cfg is defined and pri_cfg) %}
+{% set supports_tph = safe_attr(device_config, 'supports_tph', False) or (tph_cfg is defined and tph_cfg) %}
+{% set supports_ltr = safe_attr(device_config, 'supports_ltr', False) or (ltr_cfg is defined and ltr_cfg) %}
+{% set supports_dpc = safe_attr(device_config, 'supports_dpc', False) or (dpc_cfg is defined and dpc_cfg) %}
+{% set supports_resizable_bar = safe_attr(device_config, 'supports_resizable_bar', False) or (resizable_bar_cfg is defined and resizable_bar_cfg) %}
+{% set supports_ari = safe_attr(device_config, 'supports_ari', False) or (ari_cfg is defined and ari_cfg) %}
 
 {% set ext_caps = namespace(list=[]) %}
 {% if supports_aer %}{% set _ = ext_caps.list.append('aer') %}{% endif %}
 {% if supports_acs %}{% set _ = ext_caps.list.append('acs') %}{% endif %}
 {% if supports_ats %}{% set _ = ext_caps.list.append('ats') %}{% endif %}
 {% if supports_sriov %}{% set _ = ext_caps.list.append('sriov') %}{% endif %}
+{% if supports_ari %}{% set _ = ext_caps.list.append('ari') %}{% endif %}
+{% if supports_pasid %}{% set _ = ext_caps.list.append('pasid') %}{% endif %}
+{% if supports_pri %}{% set _ = ext_caps.list.append('pri') %}{% endif %}
+{% if supports_tph %}{% set _ = ext_caps.list.append('tph') %}{% endif %}
+{% if supports_ltr %}{% set _ = ext_caps.list.append('ltr') %}{% endif %}
+{% if supports_resizable_bar %}{% set _ = ext_caps.list.append('resizable_bar') %}{% endif %}
+{% if supports_dpc %}{% set _ = ext_caps.list.append('dpc') %}{% endif %}
 
 {% if ext_caps.list|length == 0 %}
 ; Mostly zeros for basic implementation
@@ -475,15 +496,105 @@ FFFFFFFF,
       0,              # Reserved
       0,              # VF Migration State
     ] %}
-    {% set cap_id = 0x0010 %}
-    {% set version = 1 %}
-  {% else %}
-    {% set body = [] %}
-    {% set cap_id = 0 %}
-    {% set version = 1 %}
-  {% endif %}
-
-  {% set cap_bytes = (body|length + 1) * 4 %}
+        {% set cap_id = 0x0010 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'ari' %}
+        {% set _ari_mfvc = safe_attr(ari_cfg, 'mfvc_function_groups_capability', False) %}
+        {% set _ari_acs = safe_attr(ari_cfg, 'acs_function_groups_capability', False) %}
+        {% set _ari_next_fn = safe_attr(ari_cfg, 'next_function_number', 0) | safe_int(0) %}
+        {% set _ari_caps = (1 if _ari_mfvc else 0) | ((1 if _ari_acs else 0) << 1) %}
+        {% set body = [
+            _ari_caps,
+            _ari_next_fn,
+        ] %}
+        {% set cap_id = 0x000E %}
+        {% set version = 1 %}
+    {% elif cap_name == 'pasid' %}
+        {% set _pasid_width = (safe_attr(pasid_cfg, 'max_pasid_width', safe_attr(device_config, 'pasid_width', 20)) | safe_int(20)) & 0x1F %}
+        {% set _pasid_priv = safe_attr(pasid_cfg, 'privilege_mode_supported', True) %}
+        {% set _pasid_exec = safe_attr(pasid_cfg, 'execute_permission_supported', True) %}
+        {% set _pasid_caps = (_pasid_width) | ((1 if _pasid_exec else 0) << 1) | ((1 if _pasid_priv else 0) << 2) %}
+        {% set body = [
+            _pasid_caps,
+            0,
+        ] %}
+        {% set cap_id = 0x001B %}
+        {% set version = 1 %}
+    {% elif cap_name == 'pri' %}
+        {% set _pri_stopped = safe_attr(pri_cfg, 'stop_supported', True) %}
+        {% set _pri_pages = (safe_attr(pri_cfg, 'max_page_requests', 32) | safe_int(32)) & 0xFFFFFFFF %}
+        {% set _pri_caps = ((1 if _pri_stopped else 0) << 0) %}
+        {% set body = [
+            _pri_caps,
+            0,
+            0,
+            _pri_pages,
+            _pri_pages,
+        ] %}
+        {% set cap_id = 0x0013 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'tph' %}
+        {% set _tph_nosteer = safe_attr(tph_cfg, 'no_st_mode_supported', True) %}
+        {% set _tph_intvec = safe_attr(tph_cfg, 'interrupt_vector_mode', True) %}
+        {% set _tph_devspec = safe_attr(tph_cfg, 'device_specific_mode', True) %}
+        {% set _tph_extreq = safe_attr(tph_cfg, 'extended_tph_requester', False) %}
+        {% set _tph_loc = safe_attr(tph_cfg, 'st_table_location', 0) | safe_int(0) %}
+        {% set _tph_size = safe_attr(tph_cfg, 'st_table_size', 0) | safe_int(0) %}
+        {% set _tph_caps = (
+            (1 if _tph_nosteer else 0)
+            | ((1 if _tph_intvec else 0) << 1)
+            | ((1 if _tph_devspec else 0) << 2)
+            | ((1 if _tph_extreq else 0) << 8)
+            | ((_tph_loc & 0x3) << 9)
+            | ((_tph_size & 0x7FF) << 16)
+        ) %}
+        {% set body = [
+            _tph_caps,
+            0,
+        ] %}
+        {% set cap_id = 0x0017 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'ltr' %}
+        {% set _ltr_max_snoop = safe_attr(ltr_cfg, 'max_snoop_latency', safe_attr(device_config, 'ltr_max_snoop_latency', 0x1003)) | safe_int(0x1003) %}
+        {% set _ltr_max_nosnoop = safe_attr(ltr_cfg, 'max_no_snoop_latency', safe_attr(device_config, 'ltr_max_no_snoop_latency', 0x1003)) | safe_int(0x1003) %}
+        {% set body = [
+            (_ltr_max_nosnoop << 16) | _ltr_max_snoop,
+        ] %}
+        {% set cap_id = 0x0018 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'resizable_bar' %}
+        {% set _rbar_num = safe_attr(resizable_bar_cfg, 'num_resizable_bars', 1) | safe_int(1) %}
+        {% set _rbar_sizes = safe_attr(resizable_bar_cfg, 'supported_sizes', 0x1F0) | safe_int(0x1F0) %}
+        {% set _rbar_current = safe_attr(resizable_bar_cfg, 'current_size', 0) | safe_int(0) %}
+        {% set body = [] %}
+        {% for i in range(_rbar_num) %}
+            {% set _ = body.append((_rbar_sizes << 4) | (i & 0x7)) %}
+            {% set _ = body.append((1 << 4) | _rbar_current) %}
+        {% endfor %}
+        {% set cap_id = 0x0015 %}
+        {% set version = 1 %}
+    {% elif cap_name == 'dpc' %}
+        {% set _dpc_rp_pio = safe_attr(dpc_cfg, 'rp_pio_log_supported', True) %}
+        {% set _dpc_sw_trigger = safe_attr(dpc_cfg, 'sw_trigger_supported', True) %}
+        {% set _dpc_log_size = (safe_attr(dpc_cfg, 'rp_pio_log_size', 0) | safe_int(0)) & 0xF %}
+        {% set _dpc_caps = (
+            ((1 if _dpc_rp_pio else 0) << 4)
+            | ((1 if _dpc_sw_trigger else 0) << 5)
+            | (_dpc_log_size << 8)
+        ) %}
+        {% set body = [
+            _dpc_caps,
+            0,
+            0,
+            0,
+        ] %}
+        {% set cap_id = 0x001D %}
+        {% set version = 1 %}
+    {% else %}
+        {% set body = [] %}
+        {% set cap_id = 0 %}
+        {% set version = 1 %}
+    {% endif %}  {% set cap_bytes = (body|length + 1) * 4 %}
   {% set next_offset = (ext_offset + cap_bytes) if not loop.last else 0 %}
   {% set has_more_after = (not loop.last) or (next_offset < EXTENDED_CFG_END) %}
   {% set header_word = ((next_offset | safe_int(0)) << 20) + ((version & 0xF) << 16) + (cap_id & 0xFFFF) %}
