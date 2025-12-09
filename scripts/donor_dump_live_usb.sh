@@ -26,8 +26,9 @@
 #       * lspci-*.txt (diagnostic context)
 #       * sysfs snapshots: resource(+resourceN), config.bin, ids, driver/iommu metadata
 #       * donor_info.txt/json from donor_dump.ko when --with-module is used
-#       * NVMe extras (if --nvme-extra): nvme_id_ctrl.txt, nvme_list.txt, nvme_fw_log.txt, nvme_smart_log.txt,
-#         nvme_error_log.txt, nvme_id_ns_<nsid>.txt per namespace, nvme_bar0.bin, nvme_regs.json
+#       * NVMe extras (if --nvme-extra): nvme_id_ctrl.txt, nvme_list.txt, nvme_list_subsys.txt,
+#         nvme_fw_log.txt, nvme_smart_log.txt, nvme_error_log.txt, nvme_id_ns_<nsid>.txt per namespace,
+#         nvme_bar0.bin, nvme_doorbells.bin, nvme_regs.json, nvme_udev_info.txt, nvme_telemetry_host.bin (best effort)
 #   - After collection, copy the datastore to your build machine and run the
 #     normal build flow pointing --datastore at that directory.
 
@@ -124,12 +125,19 @@ if [[ -d "$SYSFS_PATH" ]]; then
         fi
 
         if [[ -n "$NVME_DEV" && -e "/dev/$NVME_DEV" ]]; then
+          echo "  NOTE: Ensure this NVMe is not the boot/system drive before proceeding."
           echo "  NVMe controller: /dev/$NVME_DEV"
           nvme list -v               > "$DATASTORE/nvme_list.txt"            2>/dev/null || true
+          nvme list-subsys           > "$DATASTORE/nvme_list_subsys.txt"     2>/dev/null || true
           nvme id-ctrl "/dev/$NVME_DEV" > "$DATASTORE/nvme_id_ctrl.txt"     2>/dev/null || true
           nvme fw-log "/dev/$NVME_DEV"  > "$DATASTORE/nvme_fw_log.txt"      2>/dev/null || true
           nvme smart-log "/dev/$NVME_DEV" > "$DATASTORE/nvme_smart_log.txt" 2>/dev/null || true
           nvme error-log "/dev/$NVME_DEV" --entries=64 > "$DATASTORE/nvme_error_log.txt" 2>/dev/null || true
+          nvme telemetry-log "/dev/$NVME_DEV" --host --output-file "$DATASTORE/nvme_telemetry_host.bin" 2>/dev/null || true
+
+          if udevadm info --query=all --path="/sys/block/${NVME_DEV}" > "$DATASTORE/nvme_udev_info.txt" 2>/dev/null; then
+            true
+          fi
 
           for nsdev in /sys/class/nvme/${NVME_DEV}n*; do
             [[ -e "$nsdev" ]] || continue
@@ -142,6 +150,8 @@ if [[ -d "$SYSFS_PATH" ]]; then
           if [[ -r "$SYSFS_PATH/resource0" ]]; then
             echo "  Capturing first 8KB of BAR0 to nvme_bar0.bin"
             dd if="$SYSFS_PATH/resource0" of="$DATASTORE/nvme_bar0.bin" bs=4K count=2 status=none 2>/dev/null || true
+            echo "  Capturing 4KB doorbell region (offset 0x1000) to nvme_doorbells.bin"
+            dd if="$SYSFS_PATH/resource0" of="$DATASTORE/nvme_doorbells.bin" bs=4K skip=1 count=1 status=none 2>/dev/null || true
             python - "$DATASTORE/nvme_bar0.bin" "$DATASTORE/nvme_regs.json" <<'PY'
       import json, struct, sys
       from pathlib import Path
@@ -238,6 +248,7 @@ if [[ -d "$SYSFS_PATH" ]]; then
           },
           "asq": asq,
           "acq": acq,
+          "doorbell_stride_bytes": 4 * (1 << cap_fields(cap).get("dstrd", 0)) if cap is not None else None,
         },
       }
 
@@ -363,6 +374,6 @@ echo "       Files: device_context.json, msix_data.json"
 echo "              plus any captured: vpd.bin, option_rom.bin/json, lspci-*.txt, resource*, config.bin, ids"
 echo "              donor_info.txt/json present if --with-module was used"
 if [[ $NVME_EXTRA -eq 1 ]]; then
-  echo "              nvme_* captures present (identify, logs, BAR0, regs)"
+  echo "              nvme_* captures present (identify, logs, BAR0/doorbells, regs, telemetry where available)"
 fi
 echo "       Transfer this directory to your build machine and run the full build there."
