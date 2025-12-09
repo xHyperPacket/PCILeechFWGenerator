@@ -19,6 +19,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Mellanox ConnectX-3 / ConnectX-4 — works but more complex; use if experienced.
 - Chelsio T4/T5 10GbE — solid PCIe behavior; more advanced but serviceable.
 - Solarflare SFN7xxx — good MSIX and config, mid-complexity.
+- Model hints: Intel EXPI9301CT (82574L), I210-T1, I350-T2/T4; Realtek-based TP-Link TG-3468/3468B (RTL8168 family).
 
 ## Audio Interfaces
 **Why audio?** Small BARs, simple capability chains, easy to isolate.
@@ -27,6 +28,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - M-Audio interfaces — straightforward register maps.
 - Generic PCIe-to-USB audio bridges — minimal PCIe complexity.
 - Focusrite Scarlett (PCIe variants/bridges) — simple bridges if encountered.
+- Model hints: Sound Blaster Z / ZxR, Xonar DX / D2X; many are easy to source used.
 
 ## Video / Capture Cards
 **Why capture?** Diverse but mostly standard endpoints; good for varied BAR/MSI-X examples.
@@ -35,6 +37,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Hauppauge WinTV series — TV-tuner style, usually simple BARs.
 - Blackmagic DeckLink series — professional; richer capabilities but solid.
 - Magewell Pro Capture series — professional but generally clean PCIe behavior.
+- Model hints: Elgato HD60 Pro/4K60 Pro, AVerMedia Live Gamer HD 2 / 4K, Hauppauge WinTV-QuadHD, Blackmagic DeckLink Mini Recorder/Monitor, Magewell Pro Capture HDMI.
 
 ## USB / IO Controllers
 **Why USB bridges?** Clean PCIe-to-USB translation, small BARs, easy dumps.
@@ -44,6 +47,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - GPIO / Digital I/O cards — industrial/measurement cards with simple maps.
 - VIA Labs USB controllers — also workable; check grouping.
 - PCIe FireWire (TI/LSI) — usually simple bridges.
+- Model hints: Inateck/Orico PCIe USB 3.0 cards (ASM1042/ASM1142/ASM2142), Renesas uPD720201/uPD720202 cards; StarTech serial/parallel PCIe cards.
 
 ## Storage Controllers (add-in preferred)
 **Why cautious?** Storage can be critical; use non-boot add-in hardware only.
@@ -52,6 +56,17 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Secondary NVMe on a PCIe adapter (NOT your boot/system NVMe) — ensure its own IOMMU group.
 - Marvell/Aquantia-based add-in NVMe adapters (pass-through) — fine if isolated.
 - Older SandForce/Phison NVMe SSDs on M.2-to-PCIe carriers — good practice targets (non-boot).
+- Model hints (HBAs): LSI 9211-8i, 9207-8i, 9300-8i flashed to IT mode.
+- Model hints (SATA): ASM1061-based PCIe SATA cards; JMicron JMB582 cards.
+- Model hints (NVMe, non-boot, on carrier): Samsung 970 EVO / 970 EVO Plus, 980 / 980 PRO (not your OS drive); WD Black SN750/SN770; Sabrent Rocket (Phison E12/E16); Intel 660p/665p; Crucial P2/P3.
+
+### M.2 NVMe donors (guidance)
+- Use a **secondary** M.2 NVMe on a PCIe carrier card in a desktop slot to gain clean IOMMU isolation and avoid the boot drive.
+- Prefer mainstream controllers with predictable behavior: Samsung 970/980 series, WD Black SN750/SN770, Intel 660p/665p, Phison E12/E16-based (Sabrent Rocket, Inland Premium), older SandForce/Phison for practice.
+- Ensure the device sits alone in its IOMMU group; move the carrier to another slot if needed.
+- Run captures while the native `nvme` driver is bound (before VFIO). With `--nvme-extra`, collect BAR0, doorbells, identify, logs, and telemetry (best effort).
+- Avoid laptop soldered M.2 or anything sharing a group with chipset bridges.
+- Keep Secure Boot disabled or enroll keys if using donor_dump.ko.
 
 ### M.2 NVMe donors (guidance)
 - Use a **secondary** M.2 NVMe on a PCIe carrier card in a desktop slot to gain clean IOMMU isolation and avoid the boot drive.
@@ -65,6 +80,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Older Wi-Fi adapters that expose a clean PCIe function (validate isolation).
 - Simple coprocessor/accelerator cards with minimal vendor init.
 - Low-end FPGA dev boards with PCIe endpoints (for experimentation), if they enumerate cleanly.
+- Model hints: TP-Link/Intel Wi-Fi cards (when isolated), TI/LSI FireWire PCIe cards.
 
 ## Devices to Avoid or De-prioritize
 - Boot/system storage (onboard NVMe/SATA) — risky and often entangled in IOMMU groups.
