@@ -3,8 +3,8 @@
 import os
 import time
 import logging
-import fcntl
 import atexit
+from src.utils.fcntl_compat import fcntl
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 from dataclasses import dataclass

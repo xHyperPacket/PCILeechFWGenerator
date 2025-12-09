@@ -12,11 +12,15 @@ Tests for container-specific VFIO hardening features:
 import os
 import sys
 import time
-import fcntl
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
+from src.utils.fcntl_compat import fcntl, FCNTL_AVAILABLE
+
+pytestmark = pytest.mark.skipif(
+    not FCNTL_AVAILABLE, reason="fcntl not available on this platform"
+)
 
 from src.cli.vfio_handler import VFIOBinder, VFIOPathManager
 from src.exceptions import VFIOBindError, VFIOGroupError

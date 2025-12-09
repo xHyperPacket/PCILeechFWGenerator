@@ -3,9 +3,9 @@
 
 import ctypes
 import errno
-import fcntl
 import logging
 import os
+from src.utils.fcntl_compat import fcntl, FCNTL_AVAILABLE
 
 from src.string_utils import safe_format
 

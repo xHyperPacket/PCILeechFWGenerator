@@ -1,9 +1,9 @@
-import fcntl as _fcntl
 import logging
 import mmap as _mmap
 from typing import Optional
 
 import pytest
+from src.utils.fcntl_compat import fcntl as _fcntl
 
 
 class _FakeMMap:

@@ -15,7 +15,6 @@ core device cloning logic and VFIO device interaction. Tests include:
 """
 
 import ctypes
-import fcntl
 import hashlib
 from logging import config
 import os
@@ -28,6 +27,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock, Mock, PropertyMock, call, mock_open, patch
 
 import pytest
+from src.utils.fcntl_compat import fcntl, FCNTL_AVAILABLE
+
+pytestmark = pytest.mark.skipif(
+    not FCNTL_AVAILABLE, reason="fcntl not available on this platform"
+)
 
 from src.cli.vfio_constants import (VFIO_DEVICE_GET_REGION_INFO,
                                     VFIO_GROUP_GET_DEVICE_FD,

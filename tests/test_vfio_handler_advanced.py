@@ -8,7 +8,6 @@ concurrent access, and edge cases in device binding workflows.
 """
 
 import errno
-import fcntl
 import os
 import sys
 import threading
@@ -18,6 +17,11 @@ from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, Mock, call, mock_open, patch
 
 import pytest
+from src.utils.fcntl_compat import fcntl, FCNTL_AVAILABLE
+
+pytestmark = pytest.mark.skipif(
+    not FCNTL_AVAILABLE, reason="fcntl not available on this platform"
+)
 
 from src.cli.vfio_handler import (
     DeviceInfo,

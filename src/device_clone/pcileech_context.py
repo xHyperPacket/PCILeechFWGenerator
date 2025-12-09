@@ -11,11 +11,11 @@ Integrates BehaviorProfiler, ConfigSpaceManager, and MSIXCapability data.
 
 import ctypes
 
-import fcntl
-
 import logging
 
 import os
+
+from src.utils.fcntl_compat import fcntl, FCNTL_AVAILABLE
 
 from dataclasses import asdict, dataclass, field, fields
 
