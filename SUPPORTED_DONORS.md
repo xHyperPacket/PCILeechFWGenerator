@@ -8,6 +8,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - ASMedia or Renesas-based PCIe USB 3.0/3.1 cards — straightforward bridges.
 - Elgato or AVerMedia capture cards — accessible, moderately simple BARs.
 - LSI/Broadcom HBAs in IT mode (add-in card) — predictable storage-class donor (not your boot disk).
+- Secondary NVMe on a PCIe/M.2 adapter (non-boot) — clean IOMMU group, good for NVMe patterns.
 
 ## Network Interface Cards (NICs)
 **Why NICs?** Simple PCIe endpoints, standard capabilities, reliable MSI/MSI-X, and abundant supply.
@@ -16,6 +17,8 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Intel I210, I350 families — server-grade, clean capability chains.
 - Broadcom NetXtreme (various) — generally well-behaved; check IOMMU grouping.
 - Mellanox ConnectX-3 / ConnectX-4 — works but more complex; use if experienced.
+- Chelsio T4/T5 10GbE — solid PCIe behavior; more advanced but serviceable.
+- Solarflare SFN7xxx — good MSIX and config, mid-complexity.
 
 ## Audio Interfaces
 **Why audio?** Small BARs, simple capability chains, easy to isolate.
@@ -23,6 +26,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - ASUS Xonar series — stable PCIe behavior.
 - M-Audio interfaces — straightforward register maps.
 - Generic PCIe-to-USB audio bridges — minimal PCIe complexity.
+- Focusrite Scarlett (PCIe variants/bridges) — simple bridges if encountered.
 
 ## Video / Capture Cards
 **Why capture?** Diverse but mostly standard endpoints; good for varied BAR/MSI-X examples.
@@ -30,6 +34,7 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Elgato capture cards — popular, consistent behavior.
 - Hauppauge WinTV series — TV-tuner style, usually simple BARs.
 - Blackmagic DeckLink series — professional; richer capabilities but solid.
+- Magewell Pro Capture series — professional but generally clean PCIe behavior.
 
 ## USB / IO Controllers
 **Why USB bridges?** Clean PCIe-to-USB translation, small BARs, easy dumps.
@@ -37,17 +42,29 @@ This guide lists donor devices that tend to work well with the PCILeech Firmware
 - Renesas/NEC PCIe USB controllers — stable, well-supported.
 - PCIe Serial/Parallel port cards — tiny BARs, minimal capabilities.
 - GPIO / Digital I/O cards — industrial/measurement cards with simple maps.
+- VIA Labs USB controllers — also workable; check grouping.
+- PCIe FireWire (TI/LSI) — usually simple bridges.
 
 ## Storage Controllers (add-in preferred)
 **Why cautious?** Storage can be critical; use non-boot add-in hardware only.
 - LSI/Broadcom HBAs (IT mode) — predictable registers; great for storage-class patterns.
 - Add-in SATA/AHCI controllers — simple endpoints when on a card.
 - Secondary NVMe on a PCIe adapter (NOT your boot/system NVMe) — ensure its own IOMMU group.
+- Marvell/Aquantia-based add-in NVMe adapters (pass-through) — fine if isolated.
+- Older SandForce/Phison NVMe SSDs on M.2-to-PCIe carriers — good practice targets (non-boot).
+
+### M.2 NVMe donors (guidance)
+- Use a **secondary** M.2 NVMe on a PCIe carrier card in a desktop slot to gain clean IOMMU isolation and avoid the boot drive.
+- Ensure the device sits alone in its IOMMU group; move the carrier to another slot if needed.
+- Run captures while the native `nvme` driver is bound (before VFIO). With `--nvme-extra`, collect BAR0, doorbells, identify, logs, and telemetry (best effort).
+- Avoid laptop soldered M.2 or anything sharing a group with chipset bridges.
+- Keep Secure Boot disabled or enroll keys if using donor_dump.ko.
 
 ## Other Suitable Donors
 - PCIe-to-FireWire or niche bridges with simple BARs.
 - Older Wi-Fi adapters that expose a clean PCIe function (validate isolation).
 - Simple coprocessor/accelerator cards with minimal vendor init.
+- Low-end FPGA dev boards with PCIe endpoints (for experimentation), if they enumerate cleanly.
 
 ## Devices to Avoid or De-prioritize
 - Boot/system storage (onboard NVMe/SATA) — risky and often entangled in IOMMU groups.
