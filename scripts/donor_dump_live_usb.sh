@@ -201,5 +201,6 @@ fi
 
 echo "[done] Datastore ready at: $(realpath "$DATASTORE")"
 echo "       Files: device_context.json, msix_data.json"
-echo "              plus any captured: vpd.bin, option_rom.bin/json, lspci-*.txt, resource"
+echo "              plus any captured: vpd.bin, option_rom.bin/json, lspci-*.txt, resource*, config.bin, ids"
+echo "              donor_info.txt/json present if --with-module was used"
 echo "       Transfer this directory to your build machine and run the full build there."
